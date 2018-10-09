@@ -20,7 +20,7 @@ FROM $base_img
 WORKDIR /
 RUN mkdir ${SPARK_HOME}/R
 
-RUN apk add --no-cache R R-dev
+RUN apt-get update && apt-get install -y r-base r-base-dev
 
 COPY R ${SPARK_HOME}/R
 ENV R_HOME /usr/lib/R

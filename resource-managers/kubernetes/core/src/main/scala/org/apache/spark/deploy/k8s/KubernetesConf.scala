@@ -18,7 +18,7 @@ package org.apache.spark.deploy.k8s
 
 import scala.collection.mutable
 
-import io.fabric8.kubernetes.api.model.{LocalObjectReference, LocalObjectReferenceBuilder, Pod}
+import io.fabric8.kubernetes.api.model.{LocalObjectReference, LocalObjectReferenceBuilder, Pod, Toleration, TolerationBuilder}
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.Config._
@@ -97,6 +97,44 @@ private[spark] case class KubernetesConf[T <: KubernetesRoleSpecificConf](
 
   def nodeSelector(): Map[String, String] =
     KubernetesUtils.parsePrefixedKeyValuePairs(sparkConf, KUBERNETES_NODE_SELECTOR_PREFIX)
+
+  def tolerations(): Seq[Toleration] =
+    KubernetesUtils.parsePrefixedKeyValuePairs(sparkConf, KUBERNETES_TOLERATION_PREFIX)
+      .map { case (key, option) =>
+        val toleration = new TolerationBuilder().withKey(key)
+
+        option.split(":", 2) match {
+          case Array("") => {
+            toleration.withOperator("Exists")
+          }
+          case Array(x) => {
+            toleration
+              .withOperator("Equal")
+              .withValue(x)
+          }
+          case Array("", "") => {
+            toleration.withOperator("Exists")
+          }
+          case Array(x, "") => {
+            toleration
+              .withOperator("Equal")
+              .withValue(x)
+          }
+          case Array("", x) => {
+            toleration
+              .withOperator("Exists")
+              .withEffect(x)
+          }
+          case Array(x, y) => {
+            toleration
+              .withOperator("Equal")
+              .withValue(x)
+              .withEffect(y)
+          }
+        }
+        toleration.build()
+      }
+      .toSeq
 
   def get[T](config: ConfigEntry[T]): T = sparkConf.get(config)
 

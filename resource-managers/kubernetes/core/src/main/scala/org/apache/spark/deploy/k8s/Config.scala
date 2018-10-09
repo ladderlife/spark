@@ -236,6 +236,7 @@ private[spark] object Config extends Logging {
     "spark.kubernetes.authenticate.submission"
 
   val KUBERNETES_NODE_SELECTOR_PREFIX = "spark.kubernetes.node.selector."
+  val KUBERNETES_TOLERATION_PREFIX = "spark.kubernetes.toleration."
 
   val KUBERNETES_DRIVER_LABEL_PREFIX = "spark.kubernetes.driver.label."
   val KUBERNETES_DRIVER_ANNOTATION_PREFIX = "spark.kubernetes.driver.annotation."
