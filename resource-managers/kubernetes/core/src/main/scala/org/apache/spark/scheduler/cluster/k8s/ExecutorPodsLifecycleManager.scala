@@ -16,12 +16,15 @@
  */
 package org.apache.spark.scheduler.cluster.k8s
 
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+
 import com.google.common.cache.Cache
 import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.client.KubernetesClient
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.k8s.Config._
 import org.apache.spark.internal.Logging
@@ -111,21 +114,33 @@ private[spark] class ExecutorPodsLifecycleManager(
       execId: Long,
       schedulerBackend: KubernetesClusterSchedulerBackend,
       execIdsRemovedInRound: mutable.Set[Long]): Unit = {
-    removeExecutorFromK8s(podState.pod)
     removeExecutorFromSpark(schedulerBackend, podState, execId)
-    execIdsRemovedInRound += execId
+    if (removeExecutorFromK8s(podState.pod)) {
+      execIdsRemovedInRound += execId
+    }
   }
 
-  private def removeExecutorFromK8s(updatedPod: Pod): Unit = {
+  private def removeExecutorFromK8s(updatedPod: Pod): Boolean = {
     // If deletion failed on a previous try, we can try again if resync informs us the pod
     // is still around.
     // Delete as best attempt - duplicate deletes will throw an exception but the end state
     // of getting rid of the pod is what matters.
-    Utils.tryLogNonFatalError {
-      kubernetesClient
-        .pods()
-        .withName(updatedPod.getMetadata.getName)
-        .delete()
+    val finishedTimestamp =
+    (updatedPod.getStatus.getContainerStatuses.asScala.flatMap {
+      v => Option(v.getState.getTerminated)
+    }.flatMap { v => Option(v.getFinishedAt) } :+ updatedPod.getMetadata.getCreationTimestamp).max
+
+    val inst = Instant.parse(finishedTimestamp)
+    if (inst.plus(4, ChronoUnit.MINUTES).compareTo(Instant.now()) < 0) {
+      Utils.tryLogNonFatalError {
+        kubernetesClient
+          .pods()
+          .withName(updatedPod.getMetadata.getName)
+          .delete()
+      }
+      true
+    } else {
+      false
     }
   }
 
